@@ -4,24 +4,10 @@ provider "aws" {
   alias = "r53"
 }
 
-data "aws_acm_certificate" "test_wildcard" {
-  domain   = "*.cadreonint.com"
-  statuses = ["ISSUED"]
-}
-
 module "app_sg" {
   source            = "../app_sg"
   project_full_name = "${var.project_full_name}"
   vpc_id            = "${var.vpc_id}"
-}
-
-resource "aws_security_group_rule" "app_sg_rule_rds" {
-  security_group_id = "${module.app_sg.app_security_group_id}"
-  type              = "ingress"
-  from_port         = "3306"
-  to_port           = "3306"
-  protocol          = "tcp"
-  self              = true
 }
 
 # Adds security group roule to Application SG to allow traffic from ELB
@@ -104,44 +90,36 @@ module "r53_record_rds" {
     "aws" = "aws.r53"
   }
 }
+module "ecs_fargate" {
+  source                = "git::https://github.com/gdubey123/symmetrical-spork"
+  name                  = "example"
+  container_name        = "nginx"
+  container_port        = "80"
+  cluster               = "${var.ecs_cluster_arn}"
+  subnets               = ["${var.subnets}"]
+  target_group_arn      = "${var.target_group_arn}"
+  vpc_id                = "${var.vpc_id}"
+  container_definitions = "${var.container_definitions}"
 
-module "app_iam_user" {
-  source            = "../app_iam_user"
-  project_full_name = "${var.project_full_name}"
-}
+  desired_count                      = 2
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+  deployment_controller_type         = "ECS"
+  assign_public_ip                   = true
+  health_check_grace_period_seconds  = 10
+  ingress_cidr_blocks                = ["0.0.0.0/0"]
+  cpu                                = 256
+  memory                             = 512
+  requires_compatibilities           = ["FARGATE"]
+  iam_path                           = "/service_role/"
+  iam_description                    = "example description"
+  enabled                            = true
 
-resource "aws_iam_user_policy" "app_iam_user_policy_s3" {
-  name = "${var.project_full_name}-s3"
-  user = "${module.app_iam_user.app_iam_user_name}"
+  create_ecs_task_execution_role = false
+  ecs_task_execution_role_arn    = "${var.ecs_task_execution_role_arn}"
 
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Sid": "Stmt1496064104000",
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetBucketLocation",
-                "s3:ListBucket"
-            ],
-            "Resource": [
-                "arn:aws:s3:::${var.app_bucket_name}"
-            ]
-        },
-        {
-            "Sid": "Stmt1496064134000",
-            "Effect": "Allow",
-            "Action": [
-                "s3:*"
-            ],
-            "Resource": [
-                "arn:aws:s3:::${var.app_bucket_name}/${var.app_s3_location}",
-                "arn:aws:s3:::${var.app_bucket_name}/${var.app_s3_location}/*"
-            ]
-        }
-    ]
-}
-EOF
+  tags = {
+    Environment = "dev"
+  }
 }
 
