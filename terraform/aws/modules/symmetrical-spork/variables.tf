@@ -68,10 +68,6 @@ variable wait_for_capacity_timeout {
   default = "50m"
 }
 
-variable rds_backup_retention_period {
-  type = "string"
-}
-
 variable app_bucket_name {
   type = "string"
 }
@@ -80,3 +76,10 @@ variable app_s3_location {
   type = "string"
 }
 
+variable container_definitions {
+  type = "string"
+}
+
+variable ecs_task_execution_role_arn {
+  type = "string"
+}
